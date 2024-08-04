@@ -1,28 +1,58 @@
 ﻿using System;
-using System.Diagnostics;
+using System.IO;
+using System.Net.Http;
+using System.Text.Json;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Desktop_Wallpaper
 {
     public partial class Form1 : Form
     {
+        int numClicks = 0;
+
         public Form1()
         {
             InitializeComponent();
         }
 
-        private void button1_Click(object sender, EventArgs e)
-        {
-            string path = "C:\\Users\\caran\\workspace\\practice\\desktop_wallpaper\\Desktop_Wallpaper\\wallpaper.ps1";
-            var startInfo = new ProcessStartInfo()
-            {
-                FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy ByPass -File \"{path}\"",
-                UseShellExecute = false
-            };
-            Process.Start(startInfo);
+        // SOURCES:
+        // https://learn.microsoft.com/en-us/dotnet/csharp/tutorials/console-webapiclient
 
-            button1.Text = "fingers crossed!";
+
+        static async Task<APOD> ProcessRepositoriesAsync(HttpClient client, string date)
+        {
+            string url = $"https://api.nasa.gov/planetary/apod?concept_tags=True&date={date}" +
+                         $"&api_key=Ec8ixequm0WkHlnG8R8ylMsaxW6tyRFip0Ws7Cir";
+
+            await using Stream stream = await client.GetStreamAsync(url);
+            var apodObj = await JsonSerializer.DeserializeAsync<APOD>(stream);
+            return apodObj ?? new("blank", "blank", "blank", new Uri("blank"));
+        }
+
+
+        private async void button1_ClickAsync(object sender, EventArgs e)
+        {
+
+            using HttpClient client = new();
+            client.DefaultRequestHeaders.Accept.Clear();
+            client.DefaultRequestHeaders.Add("User-Agent", ".NET Foundation Repository Reporter");
+
+            DateTime today = DateTime.Now;
+            string date = today.AddDays(-numClicks).ToString("yyyy-MM-dd");            
+
+            var apod = await ProcessRepositoriesAsync(client, date);
+
+
+            if(apod.MediaType != "image")
+            {
+                date = DateTime.Parse(date).AddDays(-numClicks-1).ToString("yyyy-MM-dd");
+                apod = await ProcessRepositoriesAsync(client, date);
+            }
+
+            Wallpaper.Set(apod.Url, Wallpaper.Style.Stretched);
+
+            numClicks++;
         }
     }
 }
